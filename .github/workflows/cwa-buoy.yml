@@ -1,0 +1,45 @@
+name: 新竹浮標每週更新
+
+on:
+  schedule:
+    # 每週一 06:40 台北（= 週日 22:40 UTC）。氣象署 O-B0075-002 只保留 30 天，每週抓一次有四倍餘裕。
+    - cron: "40 22 * * 0"
+  workflow_dispatch:        # 也可以在 Actions 頁面手動按「Run workflow」
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cwa-buoy
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 抓 30 天資料並合併進長期 CSV
+        env:
+          CWA_API_KEY: ${{ secrets.CWA_API_KEY }}
+        run: python scripts/fetch_cwa_buoy.py --station 46757B --csv data/46757B_hourly.csv
+
+      - name: 重建 GitHub Pages 頁面
+        run: python scripts/build_page.py --csv data/46757B_hourly.csv --template template/weather_window_template.html --out docs/index.html
+
+      - name: 提交變更
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/46757B_hourly.csv docs/index.html
+          if git diff --cached --quiet; then
+            echo "沒有新資料"
+          else
+            git commit -m "data: 新竹浮標 46757B 更新 $(TZ=Asia/Taipei date +%F)"
+            git push
+          fi

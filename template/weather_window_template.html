@@ -1,0 +1,401 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>天候窗計算器</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: controls on the left, monthly charts and the time-series window on the right; stacks on a phone. */
+:root {
+  --bg: #FAFAF7; --surface: #FFFFFF; --ink: #1C2B36; --ink-2: #4A5A66; --muted: #6B7A86;
+  --line: #DDE3E6; --line-2: #C7D1D5; --grid: #E6ECEE;
+  --accent: #0E7C86; --accent-ink: #FFFFFF; --tint: #EAF3F3; --warm: #FBEFE7; --warm-ink: #A8471A;
+  --c1: #00909A; --c2: #D8612A; --c3: #3A6FB0; --ok: #2F7D4F; --no: #B63A2E; --okbg: #E4F1E8; --nobg: #F7E3E0;
+  --sea: #DCEBEE;
+  --shadow: 0 1px 2px rgba(27,42,51,.06), 0 10px 28px rgba(27,42,51,.07);
+  --font-body: 'Noto Sans TC', system-ui, -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10191E; --surface: #172229; --ink: #E6ECEF; --ink-2: #B5C2C9; --muted: #8B9AA3;
+    --line: #2A3942; --line-2: #3A4B55; --grid: #223039;
+    --accent: #4FB8C1; --accent-ink: #0B1519; --tint: #163238; --warm: #3B2A1E; --warm-ink: #F0A678;
+    --c1: #3FC0C8; --c2: #F08A5A; --c3: #7FA8E0; --ok: #6CC392; --no: #EF7F73; --okbg: #1C3A2A; --nobg: #3E2320;
+    --sea: #1B3038;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10191E; --surface: #172229; --ink: #E6ECEF; --ink-2: #B5C2C9; --muted: #8B9AA3;
+  --line: #2A3942; --line-2: #3A4B55; --grid: #223039;
+  --accent: #4FB8C1; --accent-ink: #0B1519; --tint: #163238; --warm: #3B2A1E; --warm-ink: #F0A678;
+  --c1: #3FC0C8; --c2: #F08A5A; --c3: #7FA8E0; --ok: #6CC392; --no: #EF7F73; --okbg: #1C3A2A; --nobg: #3E2320;
+  --sea: #1B3038;
+  --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 28px rgba(0,0,0,.3);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 22px 56px; display: grid; gap: 18px; }
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { text-wrap: balance; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; }
+h1 { font-size: clamp(24px, 3vw, 32px); line-height: 1.2; font-weight: 700; }
+.lede { color: var(--ink-2); max-width: 70ch; font-size: 15.5px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-top: 6px; }
+.tab { border: 0; background: transparent; padding: 10px 14px 12px; cursor: pointer; font-size: 16px; font-weight: 500; color: var(--ink-2); border-bottom: 3px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 10px; align-items: baseline; }
+.tab .n { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 700; }
+.panel { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 900px) { .panel { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); min-width: 0; }
+.ctrl { display: grid; gap: 16px; }
+.ctrl h2 { font-size: 17px; font-weight: 700; }
+.how { font-size: 14px; color: var(--ink-2); border-left: 3px solid var(--accent); padding-left: 10px; }
+.how b { color: var(--ink); }
+.field { display: grid; gap: 4px; }
+.field .lab { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 14.5px; color: var(--ink-2); }
+.field .lab output { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 15px; color: var(--ink); font-weight: 600; }
+input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
+input[type="number"], select { border: 1px solid var(--line-2); background: var(--surface); border-radius: 8px; padding: 6px 10px; width: 100%; min-width: 0; }
+input[type="number"] { font-family: var(--font-mono); }
+input[type="file"] { font-size: 13px; width: 100%; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 7px 6px; cursor: pointer; font-size: 14.5px; color: var(--ink-2); }
+.seg button + button { border-left: 1px solid var(--line-2); }
+.seg button[aria-pressed="true"] { background: var(--tint); color: var(--accent); font-weight: 700; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.preset { border: 1px solid var(--line-2); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 14px; cursor: pointer; }
+.preset[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.note { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.vis { display: grid; gap: 18px; min-width: 0; }
+.figcap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; margin-bottom: 8px; }
+.figcap h3 { font-size: 16px; font-weight: 700; }
+.figcap .sub { font-size: 13px; color: var(--muted); }
+svg.chart { width: 100%; height: auto; display: block; font-family: var(--font-body); }
+svg.chart text { fill: var(--ink-2); font-size: 12.5px; }
+svg.chart .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+svg.chart .axis { stroke: var(--line-2); }
+svg.chart .grid { stroke: var(--grid); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); margin-top: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 22px; height: 0; border-top: 3px solid currentColor; border-radius: 2px; }
+.legend i.box { width: 14px; height: 12px; border: 0; border-radius: 3px; background: currentColor; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.stat .k { font-size: 12.5px; color: var(--muted); }
+.stat .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 600; line-height: 1.2; }
+.stat .v small { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+.stat .s { font-size: 12.5px; color: var(--ink-2); }
+.stat.good .v { color: var(--ok); } .stat.warn .v { color: var(--no); }
+.pill { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 700; }
+.pill.ok { background: var(--okbg); color: var(--ok); } .pill.no { background: var(--nobg); color: var(--no); }
+.one { background: var(--warm); color: var(--warm-ink); border-radius: 10px; padding: 12px 14px; font-size: 15px; line-height: 1.5; }
+.one b { color: var(--ink); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 700; color: var(--ink-2); font-size: 13.5px; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+tr.hi { background: var(--tint); }
+.tbl-wrap { overflow-x: auto; }
+.steps { display: grid; gap: 8px; }
+.step { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 14.5px; }
+.step .i { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.step .f { font-family: var(--font-mono); font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid; gap:6px">
+    <p class="eyebrow">Marine operations · weather windows</p>
+    <h1>天候窗計算器</h1>
+    <p class="lede">把多年的逐時波高資料變成「能不能做」：先設作業的限制海況和需要的連續時間，看各月有多少窗口、要等多久；再用作業基準工期和預報折減判斷一次作業能不能出航。內建 __LABEL__ 逐時資料（每週自動更新），也可以載入自己下載的氣象署 CSV。</p>
+    <div class="tabs" role="tablist" aria-label="分頁">
+      <button class="tab" role="tab" id="tb-win" aria-controls="tab-win" aria-selected="true"><span class="n">1</span>各月窗口與等候時間</button>
+      <button class="tab" role="tab" id="tb-ts" aria-controls="tab-ts" aria-selected="false"><span class="n">2</span>時序裡找窗口</button>
+      <button class="tab" role="tab" id="tb-go" aria-controls="tab-go" aria-selected="false"><span class="n">3</span>這次作業能不能做</button>
+    </div>
+  </header>
+
+  <!-- ============ 1. monthly windows ============ -->
+  <section class="panel" id="tab-win" role="tabpanel" aria-labelledby="tb-win">
+    <div class="card ctrl">
+      <h2>各月窗口與等候時間</h2>
+      <p class="how"><b>怎麼用：</b>拖「限制海況」和「需要的連續時間」，看各月落在窗口裡的時間比例和平均等候時間；按預設可以快速切換常見作業。</p>
+      <div class="presets" id="presets"></div>
+      <div class="field"><div class="lab"><span>限制海況 Hs</span><output id="o-lim"></output></div><input type="range" id="i-lim" min="0.5" max="4" step="0.1" value="1.5"></div>
+      <div class="field"><div class="lab"><span>需要的連續時間 D（作業基準工期）</span><output id="o-dur"></output></div><input type="range" id="i-dur" min="6" max="168" step="6" value="72"></div>
+      <div class="field"><div class="lab"><span>資料</span></div>
+        <div class="seg" id="ds-seg"><button type="button" data-ds="builtin" aria-pressed="true">__LABEL__</button><button type="button" data-ds="own" aria-pressed="false">自己的 CSV</button></div></div>
+      <div class="field" id="own-field" hidden><div class="lab"><span>氣象署「波浪逐時」CSV（H 欄為 cm）</span></div><input type="file" id="i-file" accept=".csv,text/csv"><p class="note" id="file-note">檔案只在你的瀏覽器裡處理，不會上傳。前面的說明列會自動跳過，表頭要有 yyyymmddhhmi 與 H。</p></div>
+      <p class="note">缺值 6 小時以內線性內插；更長的缺值視為不可作業（保守）。窗口＝連續 D 小時 Hs ≤ 限制；「落在窗口裡的比例」＝該月在合格窗口內的小時數 ÷ 該月小時數；等候時間＝從任一小時起到下一個合格窗口開始的時間，在窗口內為 0。</p>
+    </div>
+    <div class="vis">
+      <div class="stats" id="win-stats"></div>
+      <div class="card">
+        <div class="figcap"><h3>各月：逐時比例 vs 落在連續窗口裡的比例</h3><span class="sub" id="win-sub"></span></div>
+        <div id="win-chart"></div>
+        <div class="legend"><span style="color:var(--c1)"><i class="box"></i>逐時 Hs ≤ 限制的比例</span><span style="color:var(--c2)"><i class="box"></i>落在連續 D 小時窗口裡的比例</span></div>
+      </div>
+      <div class="card">
+        <div class="figcap"><h3>各月：等到下一個窗口的平均時間</h3><span class="sub">在窗口內為 0；月底的等候跨到下個月</span></div>
+        <div id="wait-chart"></div>
+      </div>
+      <div class="card">
+        <div class="figcap"><h3>各月數字</h3><span class="sub">點月份可以跳到第 2 分頁的時序</span></div>
+        <div class="tbl-wrap"><table id="win-table"></table></div>
+      </div>
+      <div class="one" id="win-one"></div>
+    </div>
+  </section>
+
+  <!-- ============ 2. time series ============ -->
+  <section class="panel" id="tab-ts" role="tabpanel" aria-labelledby="tb-ts" hidden>
+    <div class="card ctrl">
+      <h2>時序裡找窗口</h2>
+      <p class="how"><b>怎麼用：</b>選月份、拖「從哪一天開始」，看 30 天的逐時 Hs；綠色是連續 D 小時以上在限制以下的窗口。限制和 D 沿用第 1 分頁。</p>
+      <div class="two">
+        <div class="field"><div class="lab"><span>月份</span></div><select id="i-month"></select></div>
+        <div class="field"><div class="lab"><span>從第幾天起</span><output id="o-day"></output></div><input type="range" id="i-day" min="1" max="28" step="1" value="1"></div>
+      </div>
+      <div class="field"><div class="lab"><span>顯示天數</span><output id="o-span"></output></div><input type="range" id="i-span" min="7" max="60" step="1" value="30"></div>
+      <p class="note">灰色段是缺值。這一頁只畫資料，不做任何平滑。</p>
+    </div>
+    <div class="vis">
+      <div class="stats" id="ts-stats"></div>
+      <div class="card">
+        <div class="figcap"><h3 id="ts-title">逐時 Hs</h3><span class="sub">虛線是限制海況；綠底是合格窗口</span></div>
+        <div id="ts-chart"></div>
+      </div>
+      <div class="card">
+        <div class="figcap"><h3>這段時間裡的窗口</h3><span class="sub">依開始時間排序</span></div>
+        <div class="tbl-wrap"><table id="ts-table"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. go / no-go ============ -->
+  <section class="panel" id="tab-go" role="tabpanel" aria-labelledby="tb-go" hidden>
+    <div class="card ctrl">
+      <h2>這次作業能不能做</h2>
+      <p class="how"><b>怎麼用：</b>輸入計畫作業工期和應急工期，得到作業基準工期；輸入作業極限和預報折減係數 α，得到可出航的預報門檻；再和預報值比。</p>
+      <div class="two">
+        <div class="field"><div class="lab"><span>計畫作業工期 T_POP（h）</span></div><input type="number" id="g-tpop" value="12" min="1" step="1"></div>
+        <div class="field"><div class="lab"><span>應急工期 T_C（h）</span></div><input type="number" id="g-tc" value="6" min="0" step="1"></div>
+      </div>
+      <div class="two">
+        <div class="field"><div class="lab"><span>作業極限波高 OP_LIM（m）</span></div><input type="number" id="g-hs" value="2.0" min="0.1" step="0.1"></div>
+        <div class="field"><div class="lab"><span>α（波）</span></div><input type="number" id="g-aw" value="0.9" min="0.3" max="1" step="0.01"></div>
+      </div>
+      <div class="two">
+        <div class="field"><div class="lab"><span>作業極限風速（m/s）</span></div><input type="number" id="g-ws" value="16" min="1" step="0.5"></div>
+        <div class="field"><div class="lab"><span>α（風）</span></div><input type="number" id="g-av" value="0.8" min="0.3" max="1" step="0.01"></div>
+      </div>
+      <div class="two">
+        <div class="field"><div class="lab"><span>預報最大 Hs（m，涵蓋 T_R）</span></div><input type="number" id="g-fhs" value="1.5" min="0" step="0.1"></div>
+        <div class="field"><div class="lab"><span>預報最大風速（m/s）</span></div><input type="number" id="g-fws" value="12" min="0" step="0.5"></div>
+      </div>
+      <p class="note">α 依預報等級、作業長度與限制值查規範的表（DNV-ST-N001 第二章）；這裡的 0.9 與 0.8 是例題值。T_C 未詳細評估時至少取 T_POP 的 50%，且不少於 6 小時。</p>
+    </div>
+    <div class="vis">
+      <div class="stats" id="go-stats"></div>
+      <div class="card">
+        <div class="figcap"><h3>判斷</h3></div>
+        <div class="steps" id="go-steps"></div>
+      </div>
+      <div class="card">
+        <div class="figcap"><h3>用內建資料看：這樣的作業，各月有多少窗口</h3><span class="sub">限制取 OP_WF，連續時間取 T_R（再加 24 小時預報餘裕只影響預報，不影響窗口）</span></div>
+        <div id="go-chart"></div>
+      </div>
+      <div class="one" id="go-one"></div>
+    </div>
+  </section>
+
+  <footer>
+    <p>__FOOTER_NOTE__</p>
+    <p>方法：DNV-ST-N001（作業基準工期、OP_LIM、α）；標準局《離岸風力發電製造及施工技術指引》3.4 節。結果用來說明方法，不是任何實際作業的判定。</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const fmt1 = (x) => (Math.round(x * 10) / 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const fmt0 = (x) => Math.round(x).toLocaleString('en-US');
+  const pct = (x) => Math.round(x * 100) + '%';
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const MONTHS = ['1 月', '2 月', '3 月', '4 月', '5 月', '6 月', '7 月', '8 月', '9 月', '10 月', '11 月', '12 月'];
+
+  // ------------------------------------------------ tabs
+  const TABS = ['win', 'ts', 'go'];
+  function showTab(name) { TABS.forEach(t => { $('tab-' + t).hidden = t !== name; $('tb-' + t).setAttribute('aria-selected', String(t === name)); }); }
+  TABS.forEach(t => $('tb-' + t).addEventListener('click', () => showTab(t)));
+  const h0 = location.hash.replace('#', ''); if (TABS.includes(h0)) showTab(h0);
+
+  // ------------------------------------------------ data
+  const BUILTIN = '__HS_CM__'.split(',').map(Number);   // hourly Hs in cm from __START_YEAR__-01-01 00:00 (Taipei), -1 = missing
+  let DATA = { hs: null, start: new Date(__START_YEAR__, 0, 1), label: '__LABEL__' };
+  function setBuiltin() { DATA = { hs: BUILTIN.map(v => v < 0 ? null : v / 100), start: new Date(__START_YEAR__, 0, 1), label: '__LABEL__' }; }
+  setBuiltin();
+
+  function fillGaps(hs, maxGap = 6) {
+    const out = hs.slice(); let i = 0;
+    while (i < out.length) {
+      if (out[i] == null) { let j = i; while (j < out.length && out[j] == null) j++; const gap = j - i;
+        if (i > 0 && j < out.length && gap <= maxGap) { const a = out[i - 1], b = out[j]; for (let k = 0; k < gap; k++) out[i + k] = a + (b - a) * (k + 1) / (gap + 1); }
+        i = j; } else i++;
+    }
+    return out;
+  }
+  function parseCWA(text) {
+    const lines = text.split(/\r?\n/); const hi = lines.findIndex(l => /^st,/.test(l.trim()));
+    if (hi < 0) throw new Error('找不到以 st, 開頭的表頭');
+    const head = lines[hi].split(',').map(s => s.trim()); const it = head.indexOf('yyyymmddhhmi'), ih = head.indexOf('H');
+    if (it < 0 || ih < 0) throw new Error('表頭缺 yyyymmddhhmi 或 H');
+    const rec = new Map(); let first = null, last = null;
+    for (let i = hi + 1; i < lines.length; i++) { const c = lines[i].split(','); if (c.length <= Math.max(it, ih)) continue; const t = c[it].trim(); if (!/^\d{12}$/.test(t)) continue;
+      const d = new Date(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8), +t.slice(8, 10)); const h = parseFloat(c[ih]); const v = isFinite(h) && h >= 0 ? h / 100 : null;
+      rec.set(d.getTime(), v); if (!first || d < first) first = d; if (!last || d > last) last = d; }
+    if (!first) throw new Error('沒有讀到資料列');
+    const start = new Date(first.getFullYear(), 0, 1), end = new Date(last.getFullYear() + 1, 0, 1); const hs = [];
+    for (let t = start.getTime(); t < end.getTime(); t += 3600e3) hs.push(rec.has(t) ? rec.get(t) : null);
+    return { hs, start, label: `${first.getFullYear()} 年 CSV（${rec.size.toLocaleString()} 筆）` };
+  }
+
+  // ------------------------------------------------ window statistics
+  function analyse(hsRaw, start, lim, D) {
+    const hs = fillGaps(hsRaw); const n = hs.length;
+    const ok = hs.map(v => v != null && v <= lim);
+    const runs = []; let i = 0;
+    while (i < n) { if (ok[i]) { let j = i; while (j < n && ok[j]) j++; runs.push([i, j - i]); i = j; } else i++; }
+    const inwin = new Uint8Array(n); const starts = [];
+    for (const [s, l] of runs) if (l >= D) { starts.push(s); for (let k = s; k < s + l; k++) inwin[k] = 1; }
+    const monthOf = new Int8Array(n); const yearOf = new Int16Array(n);
+    for (let k = 0; k < n; k++) { const d = new Date(start.getTime() + k * 3600e3); monthOf[k] = d.getMonth(); yearOf[k] = d.getFullYear(); }
+    const M = Array.from({ length: 12 }, () => ({ hours: 0, valid: 0, le: 0, inwin: 0, waits: [], nwin: 0, sum: 0 }));
+    let si = 0;
+    for (let k = 0; k < n; k++) { const m = M[monthOf[k]]; m.hours++; if (hs[k] != null) { m.valid++; m.sum += hs[k]; if (hs[k] <= lim) m.le++; }
+      if (inwin[k]) { m.inwin++; m.waits.push(0); } else { while (si < starts.length && starts[si] < k) si++; m.waits.push(si < starts.length ? starts[si] - k : null); } }
+    for (const s of starts) M[monthOf[s]].nwin++;
+    const monthly = M.map(m => { const w = m.waits.filter(x => x != null); return { cov: m.valid / m.hours, mean: m.valid ? m.sum / m.valid : null, pLe: m.valid ? m.le / m.valid : null, work: m.inwin / m.hours, nwin: m.nwin, wait: w.length ? w.reduce((a, b) => a + b, 0) / w.length : null,
+      wait80: w.length ? w.slice().sort((a, b) => a - b)[Math.floor(0.8 * (w.length - 1))] : null }; });
+    const validAll = hs.filter(v => v != null);
+    return { hs, ok, inwin, starts, runs, monthly, n, cov: validAll.length / n, leAll: validAll.filter(v => v <= lim).length / Math.max(1, validAll.length), workAll: inwin.reduce((a, b) => a + b, 0) / n };
+  }
+
+  // ------------------------------------------------ chart helper
+  function chart(o) {
+    const W = o.w || 720, H = o.h || 320, ml = o.ml ?? 56, mr = o.mr ?? 16, mt = o.mt ?? 18, mb = o.mb ?? 40;
+    const x0 = ml, x1 = W - mr, y0 = H - mb, y1 = mt; const [xa, xb] = o.x, [ya, yb] = o.y;
+    const X = v => x0 + (v - xa) / (xb - xa) * (x1 - x0), Y = v => y0 - (v - ya) / (yb - ya) * (y0 - y1);
+    const parts = [];
+    (o.yticks || []).forEach(v => { const y = Y(v); parts.push(`<line class="grid" x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke-width="1"/>`); parts.push(`<text class="num" x="${x0 - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end">${(o.yfmt || String)(v)}</text>`); });
+    if (o.xcat) { const bw = (x1 - x0) / o.xcat.length; o.xcat.forEach((c, i) => parts.push(`<text x="${(x0 + bw * (i + 0.5)).toFixed(1)}" y="${y0 + 18}" text-anchor="middle">${esc(c)}</text>`)); }
+    (o.xticks || []).forEach(v => { const x = X(v); parts.push(`<line class="axis" x1="${x.toFixed(1)}" y1="${y0}" x2="${x.toFixed(1)}" y2="${y0 + 5}" stroke-width="1"/>`); parts.push(`<text class="num" x="${x.toFixed(1)}" y="${y0 + 18}" text-anchor="middle">${(o.xfmt || String)(v)}</text>`); });
+    parts.push(`<line class="axis" x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke-width="1.5"/>`);
+    if (o.ylab) parts.push(`<text x="${x0}" y="${mt - 5}" text-anchor="start">${esc(o.ylab)}</text>`);
+    return { X, Y, x0, x1, y0, y1, W, H, parts, add: s => parts.push(s), html: extra => `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria || '')}">${parts.join('')}${extra || ''}</svg>` };
+  }
+
+  // ------------------------------------------------ 1. monthly
+  const S = { lim: 1.5, D: 72, month: 0, day: 1, span: 30 };
+  const PRESETS = [{ label: 'hook-up：1.5 m、72 h', lim: 1.5, D: 72 }, { label: '打樁：2.0 m、24 h', lim: 2.0, D: 24 }, { label: '升船／吊裝：2.5 m、12 h', lim: 2.5, D: 12 }, { label: '拖航＋hook-up：1.5 m、144 h', lim: 1.5, D: 144 }];
+  const pr = $('presets'); PRESETS.forEach(p => { const b = document.createElement('button'); b.type = 'button'; b.className = 'preset'; b.textContent = p.label; b.addEventListener('click', () => { S.lim = p.lim; S.D = p.D; $('i-lim').value = p.lim; $('i-dur').value = p.D; render(); }); pr.append(b); });
+  let R = null;
+  function render() {
+    pr.querySelectorAll('.preset').forEach((b, i) => b.setAttribute('aria-pressed', String(PRESETS[i].lim === S.lim && PRESETS[i].D === S.D)));
+    $('o-lim').textContent = `${fmt1(S.lim)} m`; $('o-dur').textContent = `${S.D} h（${fmt1(S.D / 24)} 天）`;
+    R = analyse(DATA.hs, DATA.start, S.lim, S.D);
+    const m = R.monthly;
+    const best = m.map((x, i) => [x.work, i]).sort((a, b) => b[0] - a[0])[0], worst = m.map((x, i) => [x.work, i]).sort((a, b) => a[0] - b[0])[0];
+    const summer = m.slice(3, 9).reduce((a, x) => a + x.work, 0) / 6, winter = [...m.slice(0, 2), ...m.slice(10)].reduce((a, x) => a + x.work, 0) / 4;
+    $('win-stats').innerHTML = [
+      ['全年逐時 Hs ≤ 限制', pct(R.leAll), '', DATA.label], ['全年落在窗口裡', pct(R.workAll), '', `連續 ${S.D} h`],
+      ['4–9 月平均', pct(summer), '', '落在窗口裡的比例', 'good'], ['11–2 月平均', pct(winter), '', '落在窗口裡的比例', winter < 0.3 ? 'warn' : ''],
+      ['最好的月', `${MONTHS[best[1]]}`, '', pct(best[0])], ['最差的月', `${MONTHS[worst[1]]}`, '', pct(worst[0])]
+    ].map(([k, v, u, s, c]) => `<div class="stat ${c || ''}"><span class="k">${k}</span><span class="v">${v}<small>${u}</small></span><span class="s">${s}</span></div>`).join('');
+    $('win-sub').textContent = `限制 Hs ≤ ${fmt1(S.lim)} m，連續 ${S.D} 小時；${DATA.label}`;
+    const c = chart({ w: 720, h: 300, x: [0, 12], y: [0, 1], yticks: [0, 0.25, 0.5, 0.75, 1], yfmt: v => pct(v), xcat: MONTHS, ylab: '比例', aria: '各月逐時比例與窗口比例' });
+    const bw = (c.x1 - c.x0) / 12;
+    m.forEach((x, i) => { const gx = c.x0 + bw * i + bw * 0.12, w = bw * 0.36;
+      if (x.pLe != null) c.add(`<rect x="${gx.toFixed(1)}" y="${c.Y(x.pLe).toFixed(1)}" width="${w.toFixed(1)}" height="${(c.y0 - c.Y(x.pLe)).toFixed(1)}" fill="var(--c1)" rx="2"/>`);
+      c.add(`<rect x="${(gx + w + 2).toFixed(1)}" y="${c.Y(x.work).toFixed(1)}" width="${w.toFixed(1)}" height="${(c.y0 - c.Y(x.work)).toFixed(1)}" fill="var(--c2)" rx="2"/>`);
+      c.add(`<text class="num" x="${(gx + w + 2 + w / 2).toFixed(1)}" y="${(c.Y(x.work) - 4).toFixed(1)}" text-anchor="middle" font-size="11">${Math.round(x.work * 100)}</text>`); });
+    $('win-chart').innerHTML = c.html();
+    const wmax = Math.max(1, ...m.map(x => (x.wait || 0) / 24)) * 1.15;
+    const cw = chart({ w: 720, h: 260, x: [0, 12], y: [0, wmax], yticks: [0, Math.round(wmax / 4 * 10) / 10, Math.round(wmax / 2 * 10) / 10, Math.round(wmax * 3 / 4 * 10) / 10].filter((v, i, a) => a.indexOf(v) === i), yfmt: v => `${v} 天`, xcat: MONTHS, ylab: '平均等候（天）', aria: '各月平均等候時間' });
+    m.forEach((x, i) => { if (x.wait == null) return; const gx = cw.x0 + bw * i + bw * 0.2, w = bw * 0.6; cw.add(`<rect x="${gx.toFixed(1)}" y="${cw.Y(x.wait / 24).toFixed(1)}" width="${w.toFixed(1)}" height="${(cw.y0 - cw.Y(x.wait / 24)).toFixed(1)}" fill="var(--c3)" rx="2"/>`);
+      cw.add(`<text class="num" x="${(gx + w / 2).toFixed(1)}" y="${(cw.Y(x.wait / 24) - 4).toFixed(1)}" text-anchor="middle" font-size="11">${fmt1(x.wait / 24)}</text>`); });
+    $('wait-chart').innerHTML = cw.html();
+    $('win-table').innerHTML = `<tr><th>月</th><th class="num">完整率</th><th class="num">平均 Hs</th><th class="num">逐時 ≤ 限制</th><th class="num">窗口裡的比例</th><th class="num">窗口數</th><th class="num">平均等候</th><th class="num">80% 等候</th></tr>` +
+      m.map((x, i) => `<tr data-m="${i}" style="cursor:pointer"><td>${MONTHS[i]}</td><td class="num">${pct(x.cov)}</td><td class="num">${x.mean == null ? '—' : fmt1(x.mean)}</td><td class="num">${x.pLe == null ? '—' : pct(x.pLe)}</td><td class="num">${pct(x.work)}</td><td class="num">${x.nwin}</td><td class="num">${x.wait == null ? '—' : fmt1(x.wait / 24) + ' 天'}</td><td class="num">${x.wait80 == null ? '—' : fmt1(x.wait80 / 24) + ' 天'}</td></tr>`).join('');
+    $('win-table').querySelectorAll('tr[data-m]').forEach(tr => tr.addEventListener('click', () => { S.month = +tr.dataset.m; $('i-month').value = S.month; showTab('ts'); renderTs(); }));
+    $('win-one').innerHTML = `<b>一句話：</b>限制 ${fmt1(S.lim)} m、連續 ${S.D} 小時的作業，${MONTHS[best[1]]}有 ${pct(best[0])} 的時間在窗口裡，${MONTHS[worst[1]]}只有 ${pct(worst[0])}；逐時比例高不等於有窗口，冬季的浪一波接一波，連續的空檔少。`;
+    renderTs(); renderGo();
+  }
+  ['i-lim', 'i-dur'].forEach(id => $(id).addEventListener('input', () => { S.lim = +$('i-lim').value; S.D = +$('i-dur').value; render(); }));
+  $('ds-seg').addEventListener('click', ev => { const b = ev.target.closest('button'); if (!b) return; $('ds-seg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    $('own-field').hidden = b.dataset.ds !== 'own'; if (b.dataset.ds === 'builtin') { setBuiltin(); render(); } });
+  $('i-file').addEventListener('change', ev => { const f = ev.target.files[0]; if (!f) return; const rd = new FileReader();
+    rd.onload = () => { try { DATA = parseCWA(rd.result); $('file-note').textContent = `已載入：${DATA.label}，從 ${DATA.start.getFullYear()} 年 1 月 1 日起共 ${DATA.hs.length.toLocaleString()} 小時。`; render(); } catch (e) { $('file-note').textContent = '讀取失敗：' + e.message; } };
+    rd.readAsText(f, 'utf-8'); });
+
+  // ------------------------------------------------ 2. time series
+  const ms = $('i-month'); MONTHS.forEach((m, i) => { const o = document.createElement('option'); o.value = i; o.textContent = m; ms.append(o); });
+  function renderTs() {
+    if (!R) return;
+    S.month = +$('i-month').value; S.day = +$('i-day').value; S.span = +$('i-span').value;
+    $('o-day').textContent = `第 ${S.day} 天`; $('o-span').textContent = `${S.span} 天`;
+    const year = DATA.start.getFullYear();
+    const t0 = new Date(year, S.month, S.day); const k0 = Math.max(0, Math.round((t0 - DATA.start) / 3600e3)); const k1 = Math.min(R.n, k0 + S.span * 24);
+    const seg = R.hs.slice(k0, k1); const ymax = Math.max(S.lim * 1.5, ...seg.filter(v => v != null)) * 1.1;
+    const c = chart({ w: 760, h: 300, ml: 48, x: [0, k1 - k0], y: [0, ymax], yticks: [0, Math.round(ymax / 3 * 10) / 10, Math.round(ymax * 2 / 3 * 10) / 10].filter((v, i, a) => a.indexOf(v) === i), yfmt: v => `${v} m`, xticks: Array.from({ length: Math.floor(S.span / 5) + 1 }, (_, i) => i * 120), xfmt: v => `${Math.round(v / 24) + S.day} 日`, ylab: '示性波高 Hs', aria: '逐時波高時序' });
+    // windows
+    let i = 0; const wins = [];
+    while (i < k1 - k0) { const k = k0 + i; if (R.inwin[k]) { let j = i; while (j < k1 - k0 && R.inwin[k0 + j]) j++; wins.push([i, j]); c.add(`<rect x="${c.X(i).toFixed(1)}" y="${c.y1}" width="${(c.X(j) - c.X(i)).toFixed(1)}" height="${c.y0 - c.y1}" fill="var(--ok)" opacity="0.14"/>`); i = j; } else i++; }
+    // missing
+    i = 0; while (i < seg.length) { if (seg[i] == null) { let j = i; while (j < seg.length && seg[j] == null) j++; c.add(`<rect x="${c.X(i).toFixed(1)}" y="${c.y1}" width="${Math.max(1, c.X(j) - c.X(i)).toFixed(1)}" height="${c.y0 - c.y1}" fill="var(--line)" opacity="0.6"/>`); i = j; } else i++; }
+    c.add(`<line x1="${c.x0}" y1="${c.Y(S.lim).toFixed(1)}" x2="${c.x1}" y2="${c.Y(S.lim).toFixed(1)}" stroke="var(--c2)" stroke-width="1.5" stroke-dasharray="6 5"/>`);
+    let d = '', pen = false; seg.forEach((v, k) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + c.X(k).toFixed(1) + ' ' + c.Y(v).toFixed(1); pen = true; });
+    c.add(`<path d="${d}" fill="none" stroke="var(--c3)" stroke-width="1.6" stroke-linejoin="round"/>`);
+    $('ts-chart').innerHTML = c.html();
+    $('ts-title').textContent = `${year} 年 ${MONTHS[S.month]} ${S.day} 日起 ${S.span} 天的逐時 Hs`;
+    const full = wins.filter(([a, b]) => true);
+    $('ts-stats').innerHTML = [['這段時間的窗口數', String(full.length), '', `連續 ≥ ${S.D} h`], ['落在窗口裡', pct(full.reduce((a, [x, y]) => a + (y - x), 0) / (k1 - k0)), '', '比例'], ['最長的窗口', full.length ? `${Math.max(...full.map(([x, y]) => y - x))}` : '—', ' h', ''], ['最大 Hs', `${fmt1(Math.max(0, ...seg.filter(v => v != null)))}`, ' m', '']]
+      .map(([k, v, u, s]) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}<small>${u}</small></span><span class="s">${s}</span></div>`).join('');
+    $('ts-table').innerHTML = `<tr><th>開始</th><th class="num">長度（h）</th><th class="num">結束</th></tr>` + (full.length ? full.map(([a, b]) => { const ta = new Date(DATA.start.getTime() + (k0 + a) * 3600e3), tb = new Date(DATA.start.getTime() + (k0 + b) * 3600e3); return `<tr><td>${ta.getMonth() + 1}/${ta.getDate()} ${String(ta.getHours()).padStart(2, '0')}:00</td><td class="num">${b - a}</td><td class="num">${tb.getMonth() + 1}/${tb.getDate()} ${String(tb.getHours()).padStart(2, '0')}:00</td></tr>`; }).join('') : '<tr><td colspan="3">這段時間沒有合格的窗口</td></tr>');
+  }
+  ['i-month', 'i-day', 'i-span'].forEach(id => $(id).addEventListener('input', renderTs));
+
+  // ------------------------------------------------ 3. go / no-go
+  function renderGo() {
+    const tpop = +$('g-tpop').value, tcIn = +$('g-tc').value, hs = +$('g-hs').value, aw = +$('g-aw').value, ws = +$('g-ws').value, av = +$('g-av').value, fhs = +$('g-fhs').value, fws = +$('g-fws').value;
+    const tcMin = Math.max(6, 0.5 * tpop); const tc = Math.max(tcIn, tcMin); const tr = tpop + tc;
+    const restricted = tpop < 72 && tr < 96;
+    const opwfHs = hs * aw, opwfWs = ws * av; const okHs = fhs <= opwfHs, okWs = fws <= opwfWs; const go = okHs && okWs && restricted;
+    $('go-stats').innerHTML = [['作業基準工期 T_R', `${tr}`, ' h', tc > tcIn ? `應急工期提高到 ${tc} h（至少 ${tcMin} h）` : `T_POP ${tpop} + T_C ${tc}`], ['受氣象限制？', restricted ? '是' : '否', '', restricted ? 'T_POP < 72 h 且 T_R < 96 h' : '要改用回歸期統計'], ['預報門檻 OP_WF（波）', fmt1(opwfHs), ' m', `${fmt1(hs)} × ${aw}`, okHs ? 'good' : 'warn'], ['預報門檻 OP_WF（風）', fmt1(opwfWs), ' m/s', `${ws} × ${av}`, okWs ? 'good' : 'warn'], ['預報要涵蓋', `${tr + 24}`, ' h', 'T_R + 24 h，每 12 h 更新'], ['判斷', go ? '可執行' : '不可執行', '', go ? '兩項都低於門檻' : (restricted ? '預報值超過門檻' : '非受氣象限制作業'), go ? 'good' : 'warn']]
+      .map(([k, v, u, s, c]) => `<div class="stat ${c || ''}"><span class="k">${k}</span><span class="v">${v}<small>${u}</small></span><span class="s">${s}</span></div>`).join('');
+    const steps = [['定 OP_LIM', `波 ${fmt1(hs)} m、風 ${ws} m/s（七項上限的最小值）`], ['算 T_R', `${tpop} + ${tc} = ${tr} h；${restricted ? '受氣象限制作業' : '超過 72／96 h，改用回歸期'}`], ['查 α', `波 ${aw}、風 ${av}（依預報等級與作業長度查表）`], ['算 OP_WF', `波 ${fmt1(hs)} × ${aw} = ${fmt1(opwfHs)} m；風 ${ws} × ${av} = ${fmt1(opwfWs)} m/s`], ['和預報比', `預報 Hs ${fmt1(fhs)} ${okHs ? '≤' : '>'} ${fmt1(opwfHs)} ${okHs ? '✓' : '✗'}；風 ${fmt1(fws)} ${okWs ? '≤' : '>'} ${fmt1(opwfWs)} ${okWs ? '✓' : '✗'}`]];
+    $('go-steps').innerHTML = steps.map(([t, f], i) => `<div class="step"><span class="i">${i + 1}</span><div><div>${t}</div><div class="f">${esc(f)}</div></div></div>`).join('');
+    const Rg = analyse(DATA.hs, DATA.start, opwfHs, Math.max(6, Math.ceil(tr / 6) * 6));
+    const c = chart({ w: 720, h: 240, x: [0, 12], y: [0, 1], yticks: [0, 0.5, 1], yfmt: v => pct(v), xcat: MONTHS, ylab: `落在連續 ${Math.max(6, Math.ceil(tr / 6) * 6)} h、Hs ≤ ${fmt1(opwfHs)} m 窗口裡的比例`, aria: '各月窗口比例' });
+    const bw = (c.x1 - c.x0) / 12; Rg.monthly.forEach((x, i) => { const gx = c.x0 + bw * i + bw * 0.2, w = bw * 0.6; c.add(`<rect x="${gx.toFixed(1)}" y="${c.Y(x.work).toFixed(1)}" width="${w.toFixed(1)}" height="${(c.y0 - c.Y(x.work)).toFixed(1)}" fill="var(--c2)" rx="2"/>`); c.add(`<text class="num" x="${(gx + w / 2).toFixed(1)}" y="${(c.Y(x.work) - 4).toFixed(1)}" text-anchor="middle" font-size="11">${Math.round(x.work * 100)}</text>`); });
+    $('go-chart').innerHTML = c.html();
+    const sorted = Rg.monthly.map((x, i) => [x.work, i]).sort((a, b) => b[0] - a[0]);
+    $('go-one').innerHTML = `<b>一句話：</b>這次作業${go ? '可以出航' : '不能出航'}：預報要低於打過折的門檻（波 ${fmt1(opwfHs)} m、風 ${fmt1(opwfWs)} m/s），而且要涵蓋 ${tr + 24} 小時。用內建資料看，這樣的作業在${MONTHS[sorted[0][1]]}最容易排（${pct(sorted[0][0])}），${MONTHS[sorted[11][1]]}最難（${pct(sorted[11][0])}）。`;
+  }
+  ['g-tpop', 'g-tc', 'g-hs', 'g-aw', 'g-ws', 'g-av', 'g-fhs', 'g-fws'].forEach(id => $(id).addEventListener('input', renderGo));
+
+  render();
+})();
+</script>
+
+</body></html>
