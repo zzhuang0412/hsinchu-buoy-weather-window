@@ -22,6 +22,7 @@ import csv
 import json
 import os
 import re
+import ssl
 import sys
 import urllib.parse
 import urllib.request
@@ -41,11 +42,16 @@ def fetch_api(key: str, station: str) -> list[dict]:
     """回傳 [{'ts': 'yyyymmddhhmi', 'H': cm or None, 'T': s or None, 'D': deg or None}, ...]"""
     q = urllib.parse.urlencode({"Authorization": key, "StationID": station})
     req = urllib.request.Request(f"{API}?{q}", headers={"User-Agent": "cwa-buoy-fetch/1.0", "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    # 氣象署憑證缺 Subject Key Identifier，Python 3.13 起預設的 VERIFY_X509_STRICT 會拒絕連線。
+    # 只關掉嚴格模式，憑證鏈與主機名稱照常驗證。
+    ctx = ssl.create_default_context()
+    ctx.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
+    with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
         payload = json.loads(r.read().decode("utf-8"))
 
-    # 結構（2026-10 實測）：Result.Records.SeaSurfaceObs.Location[].StationObsTimes.StationObsTime[]
+    # 結構（2026-10-15 實測）：Records.SeaSurfaceObs.Location[].StationObsTimes.StationObsTime[]（與 Result.Fields 並列）
     #   每筆：{"DateTime": "2026-10-02T22:00:00+08:00", "WeatherElements": {"WaveHeight": "1.8", "WavePeriod": "5.0", "WaveDirection": "11.0", ...}}
+    #   約 721 筆、順序不固定；缺測為字串 "None"。
     # 氣象署偶爾改大小寫或多包一層，所以用遞迴搜尋 StationObsTime 清單，不寫死路徑。
     records = []
     for loc in _find_lists(payload, "Location"):
